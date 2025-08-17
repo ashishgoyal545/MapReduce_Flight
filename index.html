@@ -11,9 +11,12 @@
     <div class="container">
         <h1>Flight Route Finder</h1>
         <div class="form-container">
-            <input type="text" id="sourceInput" placeholder="Source Airport (e.g., JFK)">
-            <input type="text" id="destinationInput" placeholder="Destination Airport (e.g., LAX)">
+            <input type="text" id="sourceInput" placeholder="Source Airport (e.g., JFK)" list="airports-list">
+            <input type="text" id="destinationInput" placeholder="Destination Airport (e.g., LAX)" list="airports-list">
+            <input type="time" id="startTime">
+            <input type="number" id="duration" placeholder="Max Duration (hours)">
             <button id="searchBtn">Find Route</button>
+            <datalist id="airports-list"></datalist>
         </div>
         <div id="results"></div>
     </div>

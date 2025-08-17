@@ -1,8 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     const sourceInput = document.getElementById('sourceInput');
     const destinationInput = document.getElementById('destinationInput');
+    const startTimeInput = document.getElementById('startTime');
+    const durationInput = document.getElementById('duration');
     const searchBtn = document.getElementById('searchBtn');
     const resultsDiv = document.getElementById('results');
+    const airportsList = document.getElementById('airports-list');
+
     let airports = [];
     let routes = [];
     let airportsMap = new Map();
@@ -20,95 +24,100 @@ document.addEventListener('DOMContentLoaded', () => {
 
             airports = airportsData.split('\n').map(line => {
                 const parts = line.split(',').map(part => part.replace(/"/g, ''));
-                const airport = {
-                    id: parts[0],
-                    name: parts[1],
-                    city: parts[2],
-                    country: parts[3],
-                    iata: parts[4],
-                    icao: parts[5]
-                };
-                if (airport.iata) {
+                const airport = { id: parts[0], name: parts[1], city: parts[2], country: parts[3], iata: parts[4] };
+                if (airport.iata && airport.name) {
                     airportsMap.set(airport.iata, airport);
                 }
                 return airport;
-            });
+            }).filter(a => a.iata && a.name); // Filter out invalid entries
 
-            routes = routesData.split('\n').map(line => {
+            // Populate datalist for dropdowns
+            let optionsHtml = '';
+            airports.forEach(airport => {
+                optionsHtml += `<option value="${airport.iata}">${airport.name}, ${airport.city}</option>`;
+            });
+            airportsList.innerHTML = optionsHtml;
+
+            routesData.split('\n').forEach(line => {
                 const parts = line.split(',');
-                const route = {
-                    sourceAirport: parts[2],
-                    destAirport: parts[4]
-                };
-                if (route.sourceAirport && route.destAirport) {
-                    if (!routesGraph.has(route.sourceAirport)) {
-                        routesGraph.set(route.sourceAirport, []);
+                const sourceAirport = parts[2];
+                const destAirport = parts[4];
+                if (sourceAirport && destAirport) {
+                    if (!routesGraph.has(sourceAirport)) {
+                        routesGraph.set(sourceAirport, []);
                     }
-                    routesGraph.get(route.sourceAirport).push(route.destAirport);
+                    // Simulate flight times for logic
+                    routesGraph.get(sourceAirport).push({
+                        destination: destAirport,
+                        departureTime: Math.floor(Math.random() * 24), // Random hour
+                        flightDuration: 2 + Math.random() * 8 // Random duration 2-10 hours
+                    });
                 }
-                return route;
             });
 
-            console.log('Airport and route data loaded, graph built.');
+            console.log('Airport and route data loaded.');
         } catch (error) {
             console.error('Failed to load data:', error);
             resultsDiv.innerHTML = '<p>Error loading data. Please try again later.</p>';
         }
     }
 
-    function findShortestRoute(source, destination) {
-        if (!routesGraph.has(source) || !airportsMap.has(destination)) {
-            return null;
-        }
-
-        const queue = [[source]];
-        const visited = new Set([source]);
+    function findPaths(startNode, endNode, startTime, maxDuration) {
+        const allPaths = [];
+        const queue = [[startNode, [startNode], startTime]]; // [currentAirport, path, currentTime]
 
         while (queue.length > 0) {
-            const path = queue.shift();
-            const airport = path[path.length - 1];
+            const [currentAirport, path, currentTime] = queue.shift();
 
-            if (airport === destination) {
-                return path;
+            if (currentAirport === endNode) {
+                allPaths.push({ path, totalTime: (currentTime - startTime) / 3600000 });
+                continue;
             }
 
-            const neighbors = routesGraph.get(airport) || [];
-            for (const neighbor of neighbors) {
-                if (!visited.has(neighbor)) {
-                    visited.add(neighbor);
-                    const newPath = [...path, neighbor];
-                    queue.push(newPath);
+            const destinations = routesGraph.get(currentAirport) || [];
+            for (const flight of destinations) {
+                const arrivalTime = new Date(currentTime.getTime() + flight.flightDuration * 3600000);
+                if ((arrivalTime - startTime) / 3600000 <= maxDuration && !path.includes(flight.destination)) {
+                    const newPath = [...path, flight.destination];
+                    queue.push([flight.destination, newPath, arrivalTime]);
                 }
             }
         }
-        return null;
+        return allPaths.sort((a, b) => a.totalTime - b.totalTime);
     }
 
-    function displayRoute(path, source, destination) {
-        const sourceName = airportsMap.get(source)?.name || source;
-        const destName = airportsMap.get(destination)?.name || destination;
-
-        if (!path) {
-            resultsDiv.innerHTML = `<p>No route found from ${sourceName} to ${destName}.</p>`;
+    function displayResults(paths, src, dst) {
+        if (paths.length === 0) {
+            resultsDiv.innerHTML = `<p>No paths found from ${src} to ${dst} within the given time.</p>`;
             return;
         }
 
-        let html = `<h2>Shortest Route from ${sourceName} to ${destName}</h2>`;
-        html += `<p>${path.map(iata => (airportsMap.get(iata)?.name || iata) + ` (${iata})`).join(' &rarr; ')}</p>`;
+        let html = `<h2>Top 5 Paths from ${src} to ${dst}</h2>`;
+        paths.slice(0, 5).forEach((p, i) => {
+            const pathAirports = p.path.map(iata => airportsMap.get(iata)?.name || iata).join(' -> ');
+            html += `<p><b>Path ${i + 1}:</b> ${pathAirports} <br>
+                       <b>Total Time:</b> ${p.totalTime.toFixed(2)} hours</p>`;
+        });
         resultsDiv.innerHTML = html;
     }
 
     searchBtn.addEventListener('click', () => {
-        const sourceIata = sourceInput.value.toUpperCase().trim();
-        const destinationIata = destinationInput.value.toUpperCase().trim();
+        const src = sourceInput.value.toUpperCase();
+        const dst = destinationInput.value.toUpperCase();
+        const startTimeStr = startTimeInput.value;
+        const duration = parseInt(durationInput.value, 10);
 
-        if (!sourceIata || !destinationIata) {
-            alert('Please enter both source and destination airports.');
+        if (!src || !dst || !startTimeStr || !duration) {
+            alert('Please fill in all fields.');
             return;
         }
 
-        const path = findShortestRoute(sourceIata, destinationIata);
-        displayRoute(path, sourceIata, destinationIata);
+        const [hours, minutes] = startTimeStr.split(':');
+        const startTime = new Date();
+        startTime.setHours(hours, minutes, 0, 0);
+
+        const paths = findPaths(src, dst, startTime, duration);
+        displayResults(paths, src, dst);
     });
 
     loadData();
