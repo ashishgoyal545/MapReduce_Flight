@@ -76,7 +76,7 @@ input[type="text"] {
 
 #graph {
     width: 100%;
-    height: 500px;
+    height: 700px; /* Increased height for more space */
     border: 1px solid #ccc;
     margin-top: 20px;
 }

@@ -122,8 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     nodes.add({
                         id: airport,
                         label: airport,
-                        title: airportInfo ? `${airportInfo.name}\n${airportInfo.city}, ${airportInfo.country}` : airport,
-                        level: j // Assign level for hierarchical layout
+                        title: airportInfo ? `${airportInfo.name}\n${airportInfo.city}, ${airportInfo.country}` : airport
                     });
                     addedNodes.add(airport);
                 }
@@ -143,38 +142,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const options = {
             layout: {
-                hierarchical: {
-                    enabled: true,
-                    direction: 'LR', // Left to Right
-                    sortMethod: 'directed',
-                    nodeSpacing: 200,
-                    treeSpacing: 250
-                }
+                improvedLayout: true,
             },
             edges: {
                 smooth: {
                     enabled: true,
-                    type: "cubicBezier",
-                    forceDirection: "horizontal",
-                    roundness: 0.4
+                    type: "dynamic",
+                    roundness: 0.5
                 },
-                font: { size: 12, align: 'middle' },
-                arrows: { to: { enabled: true, scaleFactor: 0.8 } }
+                font: { size: 14, align: 'middle' },
+                arrows: { to: { enabled: true, scaleFactor: 1 } }
             },
             nodes: {
-                shape: 'box',
-                size: 25,
-                font: { size: 16, color: '#333' },
-                borderWidth: 2,
-                margin: 10
+                shape: 'dot',
+                size: 30,
+                font: { size: 18, color: '#333' },
+                borderWidth: 3,
             },
             physics: {
-                enabled: false // Disable physics for hierarchical layout
+                enabled: true,
+                barnesHut: {
+                    gravitationalConstant: -30000,
+                    centralGravity: 0.3,
+                    springLength: 200,
+                    springConstant: 0.05,
+                    damping: 0.09,
+                    avoidOverlap: 0.1
+                },
+                solver: 'barnesHut',
+                stabilization: { iterations: 200 }
             },
             interaction: {
                 hover: true,
                 tooltipDelay: 200,
-                dragNodes: false,
+                dragNodes: true,
                 dragView: true,
                 zoomView: true
             }
