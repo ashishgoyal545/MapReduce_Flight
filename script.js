@@ -115,18 +115,69 @@ document.addEventListener('DOMContentLoaded', () => {
         const addedNodes = new Set();
 
         paths.forEach((p, i) => {
-            const color = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF'][i % 5];
+            const color = ['#3498db', '#2ecc71', '#e74c3c', '#f1c40f', '#9b59b6'][i % 5];
             p.path.forEach((airport, j) => {
                 if (!addedNodes.has(airport)) {
-                    nodes.add({ id: airport, label: airport });
+                    const airportInfo = airportsMap.get(airport);
+                    nodes.add({
+                        id: airport,
+                        label: airport,
+                        title: airportInfo ? `${airportInfo.name}\n${airportInfo.city}, ${airportInfo.country}` : airport
+                    });
                     addedNodes.add(airport);
                 }
                 if (j > 0) {
-                    edges.add({ from: p.path[j - 1], to: airport, arrows: 'to', color: { color }, label: p.details[j-1].airline });
+                    const flight = p.details[j - 1];
+                    edges.add({
+                        from: p.path[j - 1],
+                        to: airport,
+                        arrows: 'to',
+                        color: { color, highlight: '#ff0000' },
+                        label: flight.airline,
+                        title: `Airline: ${flight.airline}<br>Dep: ${flight.dep.toLocaleTimeString()}<br>Arr: ${flight.arr.toLocaleTimeString()}`
+                    });
                 }
             });
         });
-        new vis.Network(graphDiv, { nodes, edges }, {});
+
+        const options = {
+            layout: {
+                improvedLayout: true,
+            },
+            edges: {
+                smooth: {
+                    enabled: true,
+                    type: "dynamic",
+                    roundness: 0.5
+                },
+                font: { size: 12, align: 'middle' },
+                arrows: { to: { enabled: true, scaleFactor: 0.8 } }
+            },
+            nodes: {
+                shape: 'dot',
+                size: 25,
+                font: { size: 16, color: '#333' },
+                borderWidth: 2,
+            },
+            physics: {
+                enabled: true,
+                barnesHut: {
+                    gravitationalConstant: -20000,
+                    springConstant: 0.04,
+                    springLength: 150
+                },
+                solver: 'barnesHut',
+                stabilization: { iterations: 150 }
+            },
+            interaction: {
+                hover: true,
+                tooltipDelay: 200,
+                dragNodes: true,
+                dragView: true,
+                zoomView: true
+            }
+        };
+        new vis.Network(graphDiv, { nodes, edges }, options);
     }
 
     // Event Listeners
