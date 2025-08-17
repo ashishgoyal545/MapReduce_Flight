@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // DOM Elements
     const sourceInput = document.getElementById('sourceInput');
     const destinationInput = document.getElementById('destinationInput');
     const startTimeInput = document.getElementById('startTime');
@@ -6,101 +7,129 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchBtn = document.getElementById('searchBtn');
     const resultsDiv = document.getElementById('results');
     const airportsList = document.getElementById('airports-list');
+    const graphDiv = document.getElementById('graph');
+    const optimalBtn = document.getElementById('optimalBtn');
+    const top5Btn = document.getElementById('top5Btn');
+    const worst5Btn = document.getElementById('worst5Btn');
 
+    // Data stores
     let airports = [];
-    let routes = [];
     let airportsMap = new Map();
-    let routesGraph = new Map();
+    let allFoundRoutes = [];
 
+    // Load data
     async function loadData() {
         try {
             const [airportsResponse, routesResponse] = await Promise.all([
                 fetch('https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat'),
                 fetch('https://raw.githubusercontent.com/jpatokal/openflights/master/data/routes.dat')
             ]);
-
             const airportsData = await airportsResponse.text();
             const routesData = await routesResponse.text();
 
             airports = airportsData.split('\n').map(line => {
                 const parts = line.split(',').map(part => part.replace(/"/g, ''));
                 const airport = { id: parts[0], name: parts[1], city: parts[2], country: parts[3], iata: parts[4] };
-                if (airport.iata && airport.name) {
-                    airportsMap.set(airport.iata, airport);
-                }
+                if (airport.iata && airport.name) airportsMap.set(airport.iata, airport);
                 return airport;
-            }).filter(a => a.iata && a.name); // Filter out invalid entries
+            }).filter(a => a.iata && a.name);
 
-            // Populate datalist for dropdowns
             let optionsHtml = '';
-            airports.forEach(airport => {
-                optionsHtml += `<option value="${airport.iata}">${airport.name}, ${airport.city}</option>`;
-            });
+            airports.forEach(a => optionsHtml += `<option value="${a.iata}">${a.name}, ${a.city}</option>`);
             airportsList.innerHTML = optionsHtml;
 
-            routesData.split('\n').forEach(line => {
+            window.routesData = routesData.split('\n').map(line => {
                 const parts = line.split(',');
-                const sourceAirport = parts[2];
-                const destAirport = parts[4];
-                if (sourceAirport && destAirport) {
-                    if (!routesGraph.has(sourceAirport)) {
-                        routesGraph.set(sourceAirport, []);
-                    }
-                    // Simulate flight times for logic
-                    routesGraph.get(sourceAirport).push({
-                        destination: destAirport,
-                        departureTime: Math.floor(Math.random() * 24), // Random hour
-                        flightDuration: 2 + Math.random() * 8 // Random duration 2-10 hours
-                    });
-                }
+                return { src: parts[2], dst: parts[4], airline: parts[0] };
             });
 
-            console.log('Airport and route data loaded.');
+            console.log('Data loaded.');
         } catch (error) {
             console.error('Failed to load data:', error);
-            resultsDiv.innerHTML = '<p>Error loading data. Please try again later.</p>';
+            resultsDiv.innerHTML = '<p>Error loading data.</p>';
         }
     }
 
-    function findPaths(startNode, endNode, startTime, maxDuration) {
+    // MapReduce Implementation
+    function mapFlights(routes, startTime, durationHours) {
+        return routes.map((route, index) => {
+            const departureTime = new Date(startTime.getTime() + (index % 24) * 3600 * 1000);
+            const arrivalTime = new Date(departureTime.getTime() + (2 + Math.random() * 8) * 3600 * 1000);
+            if (departureTime >= startTime && (departureTime - startTime) / 3600000 <= durationHours) {
+                return { src: route.src, dst: route.dst, dep: departureTime, arr: arrivalTime, airline: route.airline };
+            }
+        }).filter(Boolean);
+    }
+
+    function reduceFlights(mappedData, src, dst, startTime) {
+        const routesFromAirport = new Map();
+        mappedData.forEach(flight => {
+            if (!routesFromAirport.has(flight.src)) routesFromAirport.set(flight.src, []);
+            routesFromAirport.get(flight.src).push(flight);
+        });
+
         const allPaths = [];
-        const queue = [[startNode, [startNode], startTime]]; // [currentAirport, path, currentTime]
+        const queue = [[src, [src], startTime, []]]; // [airport, path, currentTime, flightDetails]
 
         while (queue.length > 0) {
-            const [currentAirport, path, currentTime] = queue.shift();
+            const [current, path, currentTime, flightDetails] = queue.shift();
 
-            if (currentAirport === endNode) {
-                allPaths.push({ path, totalTime: (currentTime - startTime) / 3600000 });
+            if (current === dst) {
+                const totalTime = (currentTime - flightDetails[0].dep) / 3600000;
+                const flightTime = flightDetails.reduce((acc, f) => acc + (f.arr - f.dep), 0) / 3600000;
+                allPaths.push({ path, totalTime, flightTime, details: flightDetails });
                 continue;
             }
 
-            const destinations = routesGraph.get(currentAirport) || [];
-            for (const flight of destinations) {
-                const arrivalTime = new Date(currentTime.getTime() + flight.flightDuration * 3600000);
-                if ((arrivalTime - startTime) / 3600000 <= maxDuration && !path.includes(flight.destination)) {
-                    const newPath = [...path, flight.destination];
-                    queue.push([flight.destination, newPath, arrivalTime]);
+            const neighbors = routesFromAirport.get(current) || [];
+            for (const flight of neighbors) {
+                if (!path.includes(flight.dst) && currentTime <= flight.dep) {
+                    const newPath = [...path, flight.dst];
+                    const newDetails = [...flightDetails, flight];
+                    queue.push([flight.dst, newPath, flight.arr, newDetails]);
                 }
             }
         }
         return allPaths.sort((a, b) => a.totalTime - b.totalTime);
     }
 
-    function displayResults(paths, src, dst) {
-        if (paths.length === 0) {
-            resultsDiv.innerHTML = `<p>No paths found from ${src} to ${dst} within the given time.</p>`;
+    // UI Functions
+    function displayPaths(paths) {
+        if (!paths || paths.length === 0) {
+            resultsDiv.innerHTML = '<p>No paths found.</p>';
             return;
         }
-
-        let html = `<h2>Top 5 Paths from ${src} to ${dst}</h2>`;
-        paths.slice(0, 5).forEach((p, i) => {
-            const pathAirports = p.path.map(iata => airportsMap.get(iata)?.name || iata).join(' -> ');
-            html += `<p><b>Path ${i + 1}:</b> ${pathAirports} <br>
-                       <b>Total Time:</b> ${p.totalTime.toFixed(2)} hours</p>`;
+        let html = '<ul>';
+        paths.forEach((p, i) => {
+            const pathStr = p.path.join(' -> ');
+            html += `<li><b>Path ${i + 1}:</b> ${pathStr}<br>
+                         Total Time: ${p.totalTime.toFixed(2)}h, Flight Time: ${p.flightTime.toFixed(2)}h</li>`;
         });
+        html += '</ul>';
         resultsDiv.innerHTML = html;
     }
 
+    function visualizePaths(paths) {
+        const nodes = new vis.DataSet();
+        const edges = new vis.DataSet();
+        const addedNodes = new Set();
+
+        paths.forEach((p, i) => {
+            const color = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF'][i % 5];
+            p.path.forEach((airport, j) => {
+                if (!addedNodes.has(airport)) {
+                    nodes.add({ id: airport, label: airport });
+                    addedNodes.add(airport);
+                }
+                if (j > 0) {
+                    edges.add({ from: p.path[j - 1], to: airport, arrows: 'to', color: { color }, label: p.details[j-1].airline });
+                }
+            });
+        });
+        new vis.Network(graphDiv, { nodes, edges }, {});
+    }
+
+    // Event Listeners
     searchBtn.addEventListener('click', () => {
         const src = sourceInput.value.toUpperCase();
         const dst = destinationInput.value.toUpperCase();
@@ -108,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const duration = parseInt(durationInput.value, 10);
 
         if (!src || !dst || !startTimeStr || !duration) {
-            alert('Please fill in all fields.');
+            alert('Please fill all fields.');
             return;
         }
 
@@ -116,8 +145,35 @@ document.addEventListener('DOMContentLoaded', () => {
         const startTime = new Date();
         startTime.setHours(hours, minutes, 0, 0);
 
-        const paths = findPaths(src, dst, startTime, duration);
-        displayResults(paths, src, dst);
+        const mapped = mapFlights(window.routesData, startTime, duration);
+        allFoundRoutes = reduceFlights(mapped, src, dst, startTime);
+        
+        displayPaths(allFoundRoutes.slice(0, 5)); // Show top 5 by default
+        visualizePaths(allFoundRoutes.slice(0, 5));
+    });
+
+    optimalBtn.addEventListener('click', () => {
+        if (allFoundRoutes.length > 0) {
+            const optimal = [allFoundRoutes[0]];
+            displayPaths(optimal);
+            visualizePaths(optimal);
+        }
+    });
+
+    top5Btn.addEventListener('click', () => {
+        if (allFoundRoutes.length > 0) {
+            const top5 = allFoundRoutes.slice(0, 5);
+            displayPaths(top5);
+            visualizePaths(top5);
+        }
+    });
+
+    worst5Btn.addEventListener('click', () => {
+        if (allFoundRoutes.length > 0) {
+            const worst5 = allFoundRoutes.slice(-5).reverse();
+            displayPaths(worst5);
+            visualizePaths(worst5);
+        }
     });
 
     loadData();
