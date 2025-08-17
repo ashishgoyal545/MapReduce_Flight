@@ -122,7 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     nodes.add({
                         id: airport,
                         label: airport,
-                        title: airportInfo ? `${airportInfo.name}\n${airportInfo.city}, ${airportInfo.country}` : airport
+                        title: airportInfo ? `${airportInfo.name}\n${airportInfo.city}, ${airportInfo.country}` : airport,
+                        level: j // Assign level for hierarchical layout
                     });
                     addedNodes.add(airport);
                 }
@@ -142,37 +143,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const options = {
             layout: {
-                improvedLayout: true,
+                hierarchical: {
+                    enabled: true,
+                    direction: 'LR', // Left to Right
+                    sortMethod: 'directed',
+                    nodeSpacing: 200,
+                    treeSpacing: 250
+                }
             },
             edges: {
                 smooth: {
                     enabled: true,
-                    type: "dynamic",
-                    roundness: 0.5
+                    type: "cubicBezier",
+                    forceDirection: "horizontal",
+                    roundness: 0.4
                 },
                 font: { size: 12, align: 'middle' },
                 arrows: { to: { enabled: true, scaleFactor: 0.8 } }
             },
             nodes: {
-                shape: 'dot',
+                shape: 'box',
                 size: 25,
                 font: { size: 16, color: '#333' },
                 borderWidth: 2,
+                margin: 10
             },
             physics: {
-                enabled: true,
-                barnesHut: {
-                    gravitationalConstant: -20000,
-                    springConstant: 0.04,
-                    springLength: 150
-                },
-                solver: 'barnesHut',
-                stabilization: { iterations: 150 }
+                enabled: false // Disable physics for hierarchical layout
             },
             interaction: {
                 hover: true,
                 tooltipDelay: 200,
-                dragNodes: true,
+                dragNodes: false,
                 dragView: true,
                 zoomView: true
             }
