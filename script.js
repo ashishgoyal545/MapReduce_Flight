@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         let html = '<ul>';
         paths.forEach((p, i) => {
-            const pathStr = p.path.join(' -> ');
+            const pathStr = p.path.map(iata => airportsMap.get(iata)?.name || iata).join(' &rarr; ');
             html += `<li><b>Path ${i + 1}:</b> ${pathStr}<br>
                          Total Time: ${p.totalTime.toFixed(2)}h, Flight Time: ${p.flightTime.toFixed(2)}h</li>`;
         });
